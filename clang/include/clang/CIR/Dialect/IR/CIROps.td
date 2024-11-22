@@ -3554,7 +3554,7 @@ def CallOp : CIR_CallOp<"call", [NoRegionArguments]> {
     For direct calls, the `call` operation represents a direct call to a
     function that is within the same symbol scope as the call. The operands
     and result types of the call must match the specified function type.
-    The callee is encoded as a aymbol reference attribute named "callee".
+    The callee is encoded as a symbol reference attribute named "callee".
 
     For indirect calls, the first `mlir::Operation` operand is the call target.
 
