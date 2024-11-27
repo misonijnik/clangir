@@ -21,6 +21,7 @@
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
+#include <string>
 
 using namespace llvm;
 using namespace mlir;
@@ -45,8 +46,13 @@ option java_package = "org.jacodb.impl.grpc";
 import "setup.proto";
 )";
 
-const char *const protoOpMessage = R"(
-message CIR{0} {{
+const char *const protoOpMessageStart = R"(
+message CIR{0} {{)";
+
+const char *const protoOpMessageField = R"(
+  {0} {1} = {2};)";
+
+const char *const protoOpMessageEnd = R"(
 }
 )";
 
@@ -57,7 +63,15 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
   std::vector<const Record *> defs = getRequestedOpDefinitions(records);
   for (auto *def : defs) {
     Operator op(*def);
-    os << formatv(protoOpMessage, op.getCppClassName());
+    const int numOperands = op.getNumOperands();
+    os << formatv(protoOpMessageStart , op.getCppClassName());
+    for (int i = 0; i != numOperands; ++i) {
+      const auto &operand = op.getOperand(i);
+      if (operand.name.empty())
+        continue;
+      os << formatv(protoOpMessageField , "string", operand.name, std::to_string(i + 1));
+    }
+    os << formatv(protoOpMessageEnd);
   }
   return false;
 }
