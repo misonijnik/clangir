@@ -30,6 +30,7 @@ add_tablegen(mlir-tblgen MLIR
   PassCAPIGen.cpp
   PassDocGen.cpp
   PassGen.cpp
+  ProtoEnumsGen.cpp
   ProtoOpDefinitionsGen.cpp
   RewriterGen.cpp
   SPIRVUtilsGen.cpp
