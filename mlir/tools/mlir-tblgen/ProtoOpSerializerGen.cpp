@@ -134,27 +134,24 @@ static bool emitOpProtoSerializer(const RecordKeeper &records,
     os << formatv(serializerCaseStart, op.getCppClassName());
     int messageIdx = 0;
     for (int i = 0; i != numOperands; ++i, ++messageIdx) {
-    //   const auto &operand = op.getOperand(i);
-    //   const auto &operandType = operand.constraint.getCppType();
-    //   auto it = cppTypeToProto.find(operandType);
-    //   const auto &operandTypeProto =
-    //       it != cppTypeToProto.end() ? it->second : operandType;
-    //   if (operand.name.empty())
-    //     continue;
-    //   if (typeBlackList.count(operandTypeProto)) {
-    //     --messageIdx;
-    //   } else if (operand.isOptional()) {
-    //     os << formatv(protoOpMessageField,
-    //                   formatv("optional {0}", operandTypeProto),
-    //                   operand.name, std::to_string(messageIdx + 1));
-    //   } else if (operand.isVariadic()) {
-    //     os << formatv(protoOpMessageField,
-    //                   formatv("repeated {0}", operandTypeProto),
-    //                   operand.name, std::to_string(messageIdx + 1));
-    //   } else {
-    //     os << formatv(protoOpMessageField, operandTypeProto, operand.name,
-    //                   std::to_string(messageIdx + 1));
-    //   }
+      const auto &operand = op.getOperand(i);
+      const auto &operandType = operand.constraint.getCppType();
+      if (operand.name.empty())
+        continue;
+      if (typeBlackList.count(operandType)) {
+        --messageIdx;
+      } else if (operand.isOptional()) {
+        // os << formatv(protoOpMessageField,
+        //               formatv("optional {0}", operandType), operand.name,
+        //               std::to_string(messageIdx + 1));
+      } else if (operand.isVariadic()) {
+        // os << formatv(protoOpMessageField,
+        //               formatv("repeated {0}", operandType), operand.name,
+        //               std::to_string(messageIdx + 1));
+      } else {
+        os << formatv(protoOpMessageField, operandType, operand.name,
+                      std::to_string(messageIdx + 1));
+      }
     }
     os << "\n";
     // const int numAttributes = op.getNumNativeAttributes();
