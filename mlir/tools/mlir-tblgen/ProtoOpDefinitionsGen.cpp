@@ -16,6 +16,7 @@
 #include "mlir/TableGen/GenInfo.h"
 #include "mlir/TableGen/Operator.h"
 #include "mlir/TableGen/Pass.h"
+#include "mlir/TableGen/Type.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CommandLine.h"
@@ -32,14 +33,6 @@ using namespace mlir;
 using namespace mlir::tblgen;
 using llvm::formatv;
 using llvm::RecordKeeper;
-
-static llvm::cl::OptionCategory protoGenCat("Options for -gen-op-proto");
-static llvm::cl::opt<std::string> protoGroupName(
-    "proto-prefix",
-    llvm::cl::desc("The prefix to use for this group of passes. The "
-                   "form will be mlirCreate<prefix><passname>, the "
-                   "prefix can avoid conflicts across libraries."),
-    llvm::cl::cat(protoGenCat));
 
 const char *const protoFileHeader = R"(
 syntax = "proto3";
@@ -82,14 +75,10 @@ const std::map<StringRef, StringRef> cppTypeToProto = {
     {"uint32_t", "uint32"},
     {"::llvm::StringRef", "string"},
     {"::llvm::APInt", "uint64"},
-    {"::std::optional<uint64_t>", "optional uint64"},
+    {"::llvm::APFloat", "double"},
+    {"::cir::GlobalDtorAttr", "google.protobuf.Empty"},
+    {"::cir::GlobalCtorAttr", "google.protobuf.Empty"},
     {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
-    {"::std::optional< ::llvm::APFloat >", "double"},
-    {"::std::optional< ::llvm::StringRef >", "optional string"},
-    {"::std::optional<::cir::GlobalDtorAttr>",
-     "optional google.protobuf.Empty"},
-    {"::std::optional<::cir::GlobalCtorAttr>",
-     "optional google.protobuf.Empty"},
     {"::mlir::TypedAttr", "google.protobuf.Any"},
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
     {"::cir::FuncType", "CIRTypeID"},
@@ -137,23 +126,33 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
     for (int i = 0; i != numOperands; ++i, ++messageIdx) {
       const auto &operand = op.getOperand(i);
       const auto &operandType = operand.constraint.getCppType();
-      auto it = cppTypeToProto.find(operandType);
-      const auto &operandTypeProto =
-          it != cppTypeToProto.end() ? it->second : operandType;
       if (operand.name.empty())
         continue;
       const auto &operandName = llvm::convertToSnakeFromCamelCase(operand.name);
-      if (typeBlackList.count(operandTypeProto)) {
+      if (typeBlackList.count(operandType)) {
         --messageIdx;
       } else if (operand.isOptional()) {
+        const auto &operandTypeOptional =
+            TypeConstraint(
+                operand.constraint.getDef().getValueAsOptionalDef("baseType"))
+                .getCppType();
+        auto it = cppTypeToProto.find(operandTypeOptional);
+        const auto &operandTypeProto =
+            it != cppTypeToProto.end() ? it->second : operandTypeOptional;
         os << formatv(protoOpMessageField,
                       formatv("optional {0}", operandTypeProto), operandName,
                       std::to_string(messageIdx + 1));
       } else if (operand.isVariadic()) {
+        auto it = cppTypeToProto.find(operandType);
+        const auto &operandTypeProto =
+            it != cppTypeToProto.end() ? it->second : operandType;
         os << formatv(protoOpMessageField,
                       formatv("repeated {0}", operandTypeProto), operandName,
                       std::to_string(messageIdx + 1));
       } else {
+        auto it = cppTypeToProto.find(operandType);
+        const auto &operandTypeProto =
+            it != cppTypeToProto.end() ? it->second : operandType;
         os << formatv(protoOpMessageField, operandTypeProto, operandName,
                       std::to_string(messageIdx + 1));
       }
@@ -161,33 +160,50 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
     os << "\n";
     const int numAttributes = op.getNumNativeAttributes();
     for (int i = 0; i != numAttributes; ++i, ++messageIdx) {
-      const auto &rawAttr = op.getAttribute(i).attr;
-      const auto &rawAttrName = op.getAttribute(i).name;
-      if (rawAttrName.empty())
+      const auto &attr = op.getAttribute(i).attr;
+      const auto &attrName = op.getAttribute(i).name;
+      if (attrName.empty())
         continue;
-      const auto &attr =
-          rawAttr.hasDefaultValue() ? rawAttr.getBaseAttr() : rawAttr;
-      auto it = cppTypeToProto.find(attr.getReturnType().str());
-      auto &attrType =
-          it != cppTypeToProto.end() ? it->second : attr.getReturnType();
+      const auto &attrType = attr.getReturnType();
       if (typeBlackList.count(attrType)) {
         --messageIdx;
       } else if (attr.isEnumAttr()) {
         EnumAttr enumAttr(attr.getDef());
         StringRef enumName = enumAttr.getEnumClassName();
         os << formatv(protoOpMessageField, formatv("CIR{0}", enumName),
-                      rawAttrName, std::to_string(messageIdx + 1));
+                      attrName, std::to_string(messageIdx + 1));
       } else if (attr.isOptional() && attr.getBaseAttr().isEnumAttr()) {
         EnumAttr enumAttr(attr.getBaseAttr().getDef());
         StringRef enumName = enumAttr.getEnumClassName();
         os << formatv(protoOpMessageField, formatv("optional CIR{0}", enumName),
-                      rawAttrName, std::to_string(messageIdx + 1));
-        // } else if (attr.isOptional()) {
-        //   os << formatv(protoOpMessageField, formatv("optional {0}",
-        //   attrType),
-        //                 rawAttrName, std::to_string(messageIdx + 1));
+                      attrName, std::to_string(messageIdx + 1));
+      } else if (attr.hasDefaultValue() && attr.getBaseAttr().isEnumAttr()) {
+        EnumAttr enumAttr(attr.getBaseAttr().getDef());
+        StringRef enumName = enumAttr.getEnumClassName();
+        os << formatv(protoOpMessageField, formatv("CIR{0}", enumName),
+                      attrName, std::to_string(messageIdx + 1));
+      } else if (attr.isOptional() && attr.getReturnType() == "bool") {
+        Attribute baseAttr(&attr.getBaseAttr().getDef());
+        const auto &baseAttrType = baseAttr.getReturnType();
+        auto it = cppTypeToProto.find(baseAttrType);
+        auto &attrTypeProto =
+            it != cppTypeToProto.end() ? it->second : baseAttrType;
+        os << formatv(protoOpMessageField, attrTypeProto, attrName,
+                      std::to_string(messageIdx + 1));
+      } else if (attr.isOptional()) {
+        Attribute baseAttr(&attr.getBaseAttr().getDef());
+        const auto &baseAttrType = baseAttr.getReturnType();
+        auto it = cppTypeToProto.find(baseAttrType);
+        auto &attrTypeProto =
+            it != cppTypeToProto.end() ? it->second : baseAttrType;
+        os << formatv(protoOpMessageField,
+                      formatv("optional {0}", attrTypeProto), attrName,
+                      std::to_string(messageIdx + 1));
       } else {
-        os << formatv(protoOpMessageField, attrType, rawAttrName,
+        auto it = cppTypeToProto.find(attrType);
+        auto &attrTypeProto =
+            it != cppTypeToProto.end() ? it->second : attrType;
+        os << formatv(protoOpMessageField, attrTypeProto, attrName,
                       std::to_string(messageIdx + 1));
       }
     }
