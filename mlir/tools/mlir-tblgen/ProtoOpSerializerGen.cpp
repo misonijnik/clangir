@@ -47,6 +47,7 @@ void Serializer::serializeOperation(mlir::Operation &inst,
                                     protocir::CIRModuleID pModuleID,
                                     TypeCache &typeCache,
                                     OperationCache &opCache,
+                                    BlockCache &blockCache,
                                     FunctionCache &functionCache
 
 ) {
@@ -59,13 +60,53 @@ const char *const serializerDefEnd = R"(
 )";
 
 const char *const serializerCaseStart = R"(
-      .Case<cir::{0}>([instID, pInst, pModuleID, &typeCache](cir::{0} op) {{
+      .Case<cir::{0}>([instID, pInst, pModuleID, &typeCache, &blockCache, &opCache](cir::{0} op) {{
         protocir::CIR{0} p{0};
         pInst->mutable_base()->set_id(instID);
 )";
 
 const char *const serializerCaseOffset = R"(
         {0}
+)";
+
+const char *const serializerCaseDefineOptionalOperand = R"(
+        auto {0} = op.{1}().getDefiningOp();
+        if ({0}) {{
+          auto {0}ID = internOperation(opCache, {0});
+
+          protocir::CIROpID p{0}ID;
+          p{0}ID.set_id({0}ID);
+
+          *p{2}.mutable_{3}() = p{0}ID;
+)";
+
+const char *const serializerCaseDefineOptionalOperandEnd = R"(
+        }
+)";
+
+const char *const serializerCaseDefineVariadicOperand = R"(
+        auto {0} = op.{1}();
+        for (auto e{0} : {0}) {{
+          auto e{0}Proto = p{2}.add_{3}();
+          auto e{0}ID = internOperation(opCache, e{0}.getDefiningOp());
+          e{0}Proto->set_id(e{0}ID);
+        }
+)";
+
+const char *const serializerCaseDefineVariadicOfVeriadicOperand = R"(
+        auto {0} = op.{1}();
+        for (auto e{0} : {0}) {{
+          auto e{0}Proto = p{2}.add_{3}();
+          for (auto ee{0} : e{0}) {{
+            auto ee{0}Proto = e{0}Proto->add_range();
+            auto ee{0}ID = internOperation(opCache, ee{0}.getDefiningOp());
+            ee{0}Proto->set_id(ee{0}ID);
+          }
+        }
+)";
+
+const char *const serializerCaseDefineOperand = R"(
+        auto {0} = op.{1}().getDefiningOp();
 )";
 
 const char *const serializerCaseEnd = R"(
@@ -91,17 +132,17 @@ const char *const protoOpMessageEnd = R"(
 )";
 
 const std::map<StringRef, StringRef> cppTypeToProto = {
-    {"::mlir::DenseI32ArrayAttr", "repeated uint32"},
-    {"::mlir::IntegerAttr", "uint64"},
-    {"::cir::VisibilityAttr", "CIRVisibilityKind"},
-    {"::mlir::FloatAttr", "double"},
-    {"::mlir::UnitAttr", "google.protobuf.Empty"},
-    {"::cir::GlobalCtorAttr", "google.protobuf.Empty"},
+    {"uint64_t", "uint64"},
+    {"uint32_t", "uint32"},
+    {"::llvm::StringRef", "string"},
+    {"::llvm::APInt", "uint64"},
+    {"::llvm::APFloat", "double"},
     {"::cir::GlobalDtorAttr", "google.protobuf.Empty"},
+    {"::cir::GlobalCtorAttr", "google.protobuf.Empty"},
+    {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
     {"::mlir::TypedAttr", "google.protobuf.Any"},
-    {"::mlir::StringAttr", "string"},
-    {"::mlir::FlatSymbolRefAttr", "string"},
-    {"::mlir::TypeAttr", "CIRTypeID"},
+    {"::cir::VisibilityAttr", "CIRVisibilityKind"},
+    {"::cir::FuncType", "CIROpID"},
     {"::mlir::Type", "CIROpID"},
     {"::cir::PointerType", "CIROpID"},
     {"::cir::IntType", "CIROpID"},
@@ -111,15 +152,17 @@ const std::map<StringRef, StringRef> cppTypeToProto = {
     {"::cir::VectorType", "CIROpID"},
     {"::cir::BoolType", "CIROpID"}};
 
-const std::set<StringRef> typeBlackList = {"::mlir::ArrayAttr",
-                                           "::cir::ASTVarDeclInterface",
-                                           "::cir::ASTCallExprInterface",
-                                           "::cir::CmpThreeWayInfoAttr",
-                                           "::cir::DynamicCastInfoAttr",
-                                           "::mlir::Attribute",
-                                           "::cir::BitfieldInfoAttr",
-                                           "::cir::AddressSpaceAttr",
-                                           "::cir::ExtraFuncAttributesAttr"};
+const std::set<StringRef> typeBlackList = {
+    "::std::optional< ::mlir::ArrayAttr >",
+    "::std::optional<::mlir::Attribute>",
+    "::std::optional<::cir::DynamicCastInfoAttr>",
+    "::std::optional<::cir::ASTVarDeclInterface>",
+    "::mlir::ArrayAttr",
+    "::cir::CmpThreeWayInfoAttr",
+    "::cir::BitfieldInfoAttr",
+    "::std::optional<::cir::AddressSpaceAttr>",
+    "::std::optional<::cir::ASTCallExprInterface>",
+    "::cir::ExtraFuncAttributesAttr"};
 
 static bool emitOpProtoSerializer(const RecordKeeper &records,
                                   raw_ostream &os) {
@@ -138,55 +181,57 @@ static bool emitOpProtoSerializer(const RecordKeeper &records,
       const auto &operandType = operand.constraint.getCppType();
       if (operand.name.empty())
         continue;
+      // const auto &operandName =
+      // llvm::convertToSnakeFromCamelCase(operand.name);
+      const auto &operandNameProto =
+          llvm::convertToSnakeFromCamelCase(operand.name);
+      const auto &operandNameCpp =
+          llvm::convertToCamelFromSnakeCase(operand.name);
       if (typeBlackList.count(operandType)) {
         --messageIdx;
-      } else if (operand.isOptional()) {
-        // os << formatv(protoOpMessageField,
-        //               formatv("optional {0}", operandType), operand.name,
-        //               std::to_string(messageIdx + 1));
-      } else if (operand.isVariadic()) {
-        // os << formatv(protoOpMessageField,
-        //               formatv("repeated {0}", operandType), operand.name,
-        //               std::to_string(messageIdx + 1));
       } else {
-        os << formatv(protoOpMessageField, operandType, operand.name,
-                      std::to_string(messageIdx + 1));
+        if (operand.isOptional()) {
+          std::string getterName = op.getGetterName(operand.name);
+          os << formatv(serializerCaseDefineOptionalOperand, operandNameCpp,
+                        getterName, op.getCppClassName(), operandNameProto);
+          os << serializerCaseDefineOptionalOperandEnd;
+          // const auto &operandTypeOptional =
+          //     TypeConstraint(
+          //         operand.constraint.getDef().getValueAsOptionalDef("baseType"))
+          //         .getCppType();
+          // auto it = cppTypeToProto.find(operandTypeOptional);
+          // const auto &operandTypeProto =
+          //     it != cppTypeToProto.end() ? it->second : operandTypeOptional;
+          // os << formatv(protoOpMessageField,
+          //               formatv("optional {0}", operandTypeProto),
+          //               operandName, std::to_string(messageIdx + 1));
+        } else if (operand.isVariadicOfVariadic()) {
+          std::string getterName = op.getGetterName(operand.name);
+          os << formatv(serializerCaseDefineVariadicOfVeriadicOperand, operandNameCpp,
+                        getterName, op.getCppClassName(), operandNameProto);
+        } else if (operand.isVariadic()) {
+          std::string getterName = op.getGetterName(operand.name);
+          os << formatv(serializerCaseDefineVariadicOperand, operandNameCpp,
+                        getterName, op.getCppClassName(), operandNameProto);
+          // auto it = cppTypeToProto.find(operandType);
+          // const auto &operandTypeProto =
+          //     it != cppTypeToProto.end() ? it->second : operandType;
+          // os << formatv(protoOpMessageField,
+          //               formatv("repeated {0}", operandTypeProto),
+          //               operandName, std::to_string(messageIdx + 1));
+        } else {
+          std::string getterName = op.getGetterName(operand.name);
+          os << formatv(serializerCaseDefineOperand, operandNameCpp,
+                        getterName);
+          // auto it = cppTypeToProto.find(operandType);
+          // const auto &operandTypeProto =
+          //     it != cppTypeToProto.end() ? it->second : operandType;
+          // os << formatv(protoOpMessageField, operandTypeProto, operandName,
+          //               std::to_string(messageIdx + 1));
+        }
       }
     }
     os << "\n";
-    // const int numAttributes = op.getNumNativeAttributes();
-    // for (int i = 0; i != numAttributes; ++i, ++messageIdx) {
-    //   const auto &rawAttr = op.getAttribute(i).attr;
-    //   const auto &rawAttrName = op.getAttribute(i).name;
-    //   if (rawAttrName.empty())
-    //     continue;
-    //   const auto &attr =
-    //       rawAttr.hasDefaultValue() ? rawAttr.getBaseAttr() : rawAttr;
-    //   auto it = cppTypeToProto.find(attr.getStorageType().str());
-    //   auto &attrType =
-    //       it != cppTypeToProto.end() ? it->second : attr.getStorageType();
-    //   if (typeBlackList.count(attrType)) {
-    //     --messageIdx;
-    //   } else if (attr.isEnumAttr()) {
-    //     EnumAttr enumAttr(attr.getDef());
-    //     StringRef enumName = enumAttr.getEnumClassName();
-    //     os << formatv(protoOpMessageField, formatv("CIR{0}", enumName),
-    //                   rawAttrName, std::to_string(messageIdx + 1));
-    //   } else if (attr.isOptional() && attr.getBaseAttr().isEnumAttr()) {
-    //     EnumAttr enumAttr(attr.getBaseAttr().getDef());
-    //     StringRef enumName = enumAttr.getEnumClassName();
-    //     os << formatv(protoOpMessageField, formatv("optional CIR{0}",
-    //     enumName),
-    //                   rawAttrName, std::to_string(messageIdx + 1));
-    //   } else if (attr.isOptional()) {
-    //     os << formatv(protoOpMessageField, formatv("optional {0}", attrType),
-    //                   rawAttrName, std::to_string(messageIdx + 1));
-    //   } else {
-    //     os << formatv(protoOpMessageField, attrType, rawAttrName,
-    //                   std::to_string(messageIdx + 1));
-    //   }
-    // }
-    // os << formatv(protoOpMessageEnd);
     os << formatv(serializerCaseEnd,
                   llvm::convertToSnakeFromCamelCase(op.getCppClassName()),
                   op.getCppClassName());

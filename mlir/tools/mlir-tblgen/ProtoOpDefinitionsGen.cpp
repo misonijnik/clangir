@@ -81,8 +81,8 @@ const std::map<StringRef, StringRef> cppTypeToProto = {
     {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
     {"::mlir::TypedAttr", "google.protobuf.Any"},
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
-    {"::cir::FuncType", "CIRTypeID"},
-    {"::mlir::Type", "CIRTypeID"},
+    {"::cir::FuncType", "CIROpID"},
+    {"::mlir::Type", "CIROpID"},
     {"::cir::PointerType", "CIROpID"},
     {"::cir::IntType", "CIROpID"},
     {"::cir::MethodType", "CIROpID"},
@@ -141,6 +141,13 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
             it != cppTypeToProto.end() ? it->second : operandTypeOptional;
         os << formatv(protoOpMessageField,
                       formatv("optional {0}", operandTypeProto), operandName,
+                      std::to_string(messageIdx + 1));
+      } else if (operand.isVariadicOfVariadic()) {
+        auto it = cppTypeToProto.find(operandType);
+        const auto &operandTypeProto =
+            it != cppTypeToProto.end() ? it->second : operandType;
+        assert(operandTypeProto == "CIROpID");
+        os << formatv(protoOpMessageField, "repeated CIROpIDs", operandName,
                       std::to_string(messageIdx + 1));
       } else if (operand.isVariadic()) {
         auto it = cppTypeToProto.find(operandType);
