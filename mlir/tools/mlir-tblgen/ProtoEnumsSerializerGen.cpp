@@ -54,6 +54,7 @@ using namespace protocir;
 const char *const serializerDeclStart = R"(
 namespace protocir {
 class EnumSerializer {
+public:
 )";
 
 const char *const serializerDeclEnum = R"(

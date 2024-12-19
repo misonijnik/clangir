@@ -35,6 +35,7 @@ using llvm::formatv;
 using llvm::RecordKeeper;
 
 const char *const serializerFileHeader = R"(
+#include "cir-tac/EnumsSerializer.h"
 #include "cir-tac/Serializer.h"
 
 #include <llvm/ADT/TypeSwitch.h>
@@ -184,6 +185,27 @@ const char *const serializerCaseDefineVariadicPrimitive = R"(
         }
 )";
 
+const char *const serializerCaseDefineEnum = R"(
+        auto {0} = op.{1}();
+        auto p{0} = EnumSerializer::serialize{4}({0});
+        p{2}.set_{3}(p{0});
+)";
+
+const char *const serializerCaseDefineEnumAttr = R"(
+        auto {0} = op.{1}().getValue();
+        auto p{0} = EnumSerializer::serialize{4}({0});
+        p{2}.set_{3}(p{0});
+)";
+
+const char *const serializerCaseDefineOptionalEnum = R"(
+        auto {0}Optional = op.{1}();
+        if ({0}Optional) {{
+          auto {0} = {0}Optional.value();
+          auto p{0} = EnumSerializer::serialize{4}({0});
+          p{2}.set_{3}(p{0});
+        }
+)";
+
 const char *const serializerCaseEnd = R"(
         pInst->mutable_{0}()->CopyFrom(p{1});
       })
@@ -267,13 +289,21 @@ static void emitOptionalAttributeSerializer(
              attrType == "::cir::GlobalDtorAttr") {
     os << formatv(serializerCaseDefineOptionalCtorDtor, attrNameCpp, getterName,
                   op.getCppClassName(), attrNameProto);
-    // } else if (attrType == "::llvm::StringRef") {
-    //   os << formatv(serializerCaseDefineOptional, attrNameCpp, getterName,
-    //                 op.getCppClassName(), attrNameProto);
   } else {
     os << formatv(serializerCaseDefineOptional, attrNameCpp, getterName,
                   op.getCppClassName(), attrNameProto);
   }
+}
+
+static void emitEnumAttributeSerializer(Operator &op,
+                                        const llvm::StringRef &attrName,
+                                        const llvm::StringRef &enumName,
+                                        const llvm::StringRef &attrNameCpp,
+                                        const llvm::StringRef &attrNameProto,
+                                        raw_ostream &os) {
+  std::string getterName = op.getGetterName(attrName);
+  os << formatv(serializerCaseDefineEnum, attrNameCpp, getterName,
+                op.getCppClassName(), attrNameProto, enumName);
 }
 
 static void emitAttributeSerializer(Operator &op,
@@ -299,13 +329,23 @@ static void emitAttributeSerializer(Operator &op,
   } else if (attrType == "::mlir::Type" || attrType == "::cir::FuncType") {
     os << formatv(serializerCaseDefineType, attrNameCpp, getterName,
                   op.getCppClassName(), attrNameProto);
-    // } else if (attrType == "::llvm::StringRef") {
-    //   os << formatv(serializerCaseDefine, attrNameCpp, getterName,
-    //                 op.getCppClassName(), attrNameProto);
+  } else if (attrType == "::cir::VisibilityAttr") {
+    std::string getterName = op.getGetterName(attrName);
+    os << formatv(serializerCaseDefineEnumAttr, attrNameCpp, getterName,
+                  op.getCppClassName(), attrNameProto, "VisibilityKind");
   } else {
     os << formatv(serializerCaseDefine, attrNameCpp, getterName,
                   op.getCppClassName(), attrNameProto);
   }
+}
+
+static void emitOptionalEnumAttributeSerializer(
+    Operator &op, const llvm::StringRef &attrName,
+    const llvm::StringRef &enumName, const llvm::StringRef &attrNameCpp,
+    const llvm::StringRef &attrNameProto, raw_ostream &os) {
+  std::string getterName = op.getGetterName(attrName);
+  os << formatv(serializerCaseDefineOptionalEnum, attrNameCpp, getterName,
+                op.getCppClassName(), attrNameProto, enumName);
 }
 
 static bool emitOpProtoSerializer(const RecordKeeper &records,
@@ -365,21 +405,20 @@ static bool emitOpProtoSerializer(const RecordKeeper &records,
       if (typesBlackList.count(attrType)) {
         --messageIdx;
       } else if (attr.isEnumAttr()) {
-        // EnumAttr enumAttr(attr.getDef());
-        // StringRef enumName = enumAttr.getEnumClassName();
-        // os << formatv(protoOpMessageField, formatv("CIR{0}", enumName),
-        //               attrName, std::to_string(messageIdx + 1));
+        EnumAttr enumAttr(attr.getDef());
+        StringRef enumName = enumAttr.getEnumClassName();
+        emitEnumAttributeSerializer(op, attrName, enumName, attrNameCpp,
+                                    attrNameProto, os);
       } else if (attr.isOptional() && attr.getBaseAttr().isEnumAttr()) {
-        // EnumAttr enumAttr(attr.getBaseAttr().getDef());
-        // StringRef enumName = enumAttr.getEnumClassName();
-        // os << formatv(protoOpMessageField, formatv("optional CIR{0}",
-        // enumName),
-        //               attrName, std::to_string(messageIdx + 1));
+        EnumAttr enumAttr(attr.getBaseAttr().getDef());
+        StringRef enumName = enumAttr.getEnumClassName();
+        emitOptionalEnumAttributeSerializer(op, attrName, enumName, attrNameCpp,
+                                            attrNameProto, os);
       } else if (attr.hasDefaultValue() && attr.getBaseAttr().isEnumAttr()) {
-        // EnumAttr enumAttr(attr.getBaseAttr().getDef());
-        // StringRef enumName = enumAttr.getEnumClassName();
-        // os << formatv(protoOpMessageField, formatv("CIR{0}", enumName),
-        //               attrName, std::to_string(messageIdx + 1));
+        EnumAttr enumAttr(attr.getBaseAttr().getDef());
+        StringRef enumName = enumAttr.getEnumClassName();
+        emitEnumAttributeSerializer(op, attrName, enumName, attrNameCpp,
+                                    attrNameProto, os);
       } else if (attr.isOptional()) {
         Attribute baseAttr(&attr.getBaseAttr().getDef());
         const auto &baseAttrType = baseAttr.getReturnType();
