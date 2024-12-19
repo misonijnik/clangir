@@ -59,8 +59,7 @@ const char *const protoEnumMessageEnd = R"(
 }
 )";
 
-static void emitEnumProto(StringRef enumName,
-                          StringRef description,
+static void emitEnumProto(StringRef enumName, StringRef description,
                           const std::vector<EnumAttrCase> &enumerants,
                           raw_ostream &os) {
   os << "// " << description << "\n";
@@ -69,11 +68,11 @@ static void emitEnumProto(StringRef enumName,
   int messageIdx = 0;
   for (const auto &enumerant : enumerants) {
     auto symbol = makeIdentifier(enumerant.getSymbol());
-    os << formatv(protoEnumMessageField, formatv("{0}{1}", enumName, symbol), std::to_string(messageIdx++));
+    os << formatv(protoEnumMessageField, formatv("{0}_{1}", enumName, symbol),
+                  std::to_string(messageIdx++));
   }
   os << formatv(protoEnumMessageEnd);
 }
-
 
 static void emitEnumProtoDef(const Record &enumDef, raw_ostream &os) {
   EnumAttr enumAttr(enumDef);
