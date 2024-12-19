@@ -70,16 +70,35 @@ const char *const protoCirOpMessageEnd = R"(
 const char *const protoCirOpMessageField = R"(
     CIR{0} {1} = {2};)";
 
-const std::map<StringRef, StringRef> cppTypeToProto = {
+const std::map<StringRef, StringRef> cppAttrTypeToProto = {
     {"uint64_t", "uint64"},
     {"uint32_t", "uint32"},
     {"::llvm::StringRef", "string"},
-    {"::llvm::APInt", "uint64"},
-    {"::llvm::APFloat", "double"},
-    {"::cir::GlobalDtorAttr", "google.protobuf.Empty"},
-    {"::cir::GlobalCtorAttr", "google.protobuf.Empty"},
+    {"::llvm::APInt", "string"},
+    {"::llvm::APFloat", "string"},
+    {"::cir::GlobalDtorAttr", "bool"},
+    {"::cir::GlobalCtorAttr", "bool"},
     {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
-    {"::mlir::TypedAttr", "google.protobuf.Any"},
+    {"::mlir::TypedAttr", "string"},
+    {"::cir::VisibilityAttr", "CIRVisibilityKind"},
+    {"::cir::FuncType", "CIRTypeID"},
+    {"::mlir::Type", "CIRTypeID"},
+    {"::cir::PointerType", "CIROpID"},
+    {"::cir::IntType", "CIROpID"},
+    {"::cir::MethodType", "CIROpID"},
+    {"::cir::DataMemberType", "CIROpID"},
+    {"::cir::ComplexType", "CIROpID"},
+    {"::cir::VectorType", "CIROpID"},
+    {"::cir::BoolType", "CIROpID"}};
+
+const std::map<StringRef, StringRef> cppOperandTypeToProto = {
+    {"uint64_t", "uint64"},
+    {"uint32_t", "uint32"},
+    {"::llvm::StringRef", "string"},
+    {"::llvm::APInt", "string"},
+    {"::llvm::APFloat", "string"},
+    {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
+    {"::mlir::TypedAttr", "string"},
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
     {"::cir::FuncType", "CIROpID"},
     {"::mlir::Type", "CIROpID"},
@@ -136,30 +155,31 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
             TypeConstraint(
                 operand.constraint.getDef().getValueAsOptionalDef("baseType"))
                 .getCppType();
-        auto it = cppTypeToProto.find(operandTypeOptional);
-        const auto &operandTypeProto =
-            it != cppTypeToProto.end() ? it->second : operandTypeOptional;
+        auto it = cppOperandTypeToProto.find(operandTypeOptional);
+        const auto &operandTypeProto = it != cppOperandTypeToProto.end()
+                                           ? it->second
+                                           : operandTypeOptional;
         os << formatv(protoOpMessageField,
                       formatv("optional {0}", operandTypeProto), operandName,
                       std::to_string(messageIdx + 1));
       } else if (operand.isVariadicOfVariadic()) {
-        auto it = cppTypeToProto.find(operandType);
+        auto it = cppOperandTypeToProto.find(operandType);
         const auto &operandTypeProto =
-            it != cppTypeToProto.end() ? it->second : operandType;
+            it != cppOperandTypeToProto.end() ? it->second : operandType;
         assert(operandTypeProto == "CIROpID");
         os << formatv(protoOpMessageField, "repeated CIROpIDs", operandName,
                       std::to_string(messageIdx + 1));
       } else if (operand.isVariadic()) {
-        auto it = cppTypeToProto.find(operandType);
+        auto it = cppOperandTypeToProto.find(operandType);
         const auto &operandTypeProto =
-            it != cppTypeToProto.end() ? it->second : operandType;
+            it != cppOperandTypeToProto.end() ? it->second : operandType;
         os << formatv(protoOpMessageField,
                       formatv("repeated {0}", operandTypeProto), operandName,
                       std::to_string(messageIdx + 1));
       } else {
-        auto it = cppTypeToProto.find(operandType);
+        auto it = cppOperandTypeToProto.find(operandType);
         const auto &operandTypeProto =
-            it != cppTypeToProto.end() ? it->second : operandType;
+            it != cppOperandTypeToProto.end() ? it->second : operandType;
         os << formatv(protoOpMessageField, operandTypeProto, operandName,
                       std::to_string(messageIdx + 1));
       }
@@ -168,7 +188,8 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
     const int numAttributes = op.getNumNativeAttributes();
     for (int i = 0; i != numAttributes; ++i, ++messageIdx) {
       const auto &attr = op.getAttribute(i).attr;
-      const auto &attrName = op.getAttribute(i).name;
+      const auto &attrName =
+          llvm::convertToSnakeFromCamelCase(op.getAttribute(i).name);
       if (attrName.empty())
         continue;
       const auto &attrType = attr.getReturnType();
@@ -189,27 +210,25 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
         StringRef enumName = enumAttr.getEnumClassName();
         os << formatv(protoOpMessageField, formatv("CIR{0}", enumName),
                       attrName, std::to_string(messageIdx + 1));
-      } else if (attr.isOptional() && attr.getReturnType() == "bool") {
-        Attribute baseAttr(&attr.getBaseAttr().getDef());
-        const auto &baseAttrType = baseAttr.getReturnType();
-        auto it = cppTypeToProto.find(baseAttrType);
-        auto &attrTypeProto =
-            it != cppTypeToProto.end() ? it->second : baseAttrType;
-        os << formatv(protoOpMessageField, attrTypeProto, attrName,
-                      std::to_string(messageIdx + 1));
       } else if (attr.isOptional()) {
         Attribute baseAttr(&attr.getBaseAttr().getDef());
         const auto &baseAttrType = baseAttr.getReturnType();
-        auto it = cppTypeToProto.find(baseAttrType);
+        auto it = cppAttrTypeToProto.find(baseAttrType);
         auto &attrTypeProto =
-            it != cppTypeToProto.end() ? it->second : baseAttrType;
-        os << formatv(protoOpMessageField,
-                      formatv("optional {0}", attrTypeProto), attrName,
-                      std::to_string(messageIdx + 1));
+            it != cppAttrTypeToProto.end() ? it->second : baseAttrType;
+        if (attrTypeProto == "bool") {
+          os << formatv(protoOpMessageField, attrTypeProto, attrName,
+                        std::to_string(messageIdx + 1));
+        } else {
+
+          os << formatv(protoOpMessageField,
+                        formatv("optional {0}", attrTypeProto), attrName,
+                        std::to_string(messageIdx + 1));
+        }
       } else {
-        auto it = cppTypeToProto.find(attrType);
+        auto it = cppAttrTypeToProto.find(attrType);
         auto &attrTypeProto =
-            it != cppTypeToProto.end() ? it->second : attrType;
+            it != cppAttrTypeToProto.end() ? it->second : attrType;
         os << formatv(protoOpMessageField, attrTypeProto, attrName,
                       std::to_string(messageIdx + 1));
       }
