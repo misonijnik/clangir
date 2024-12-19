@@ -68,8 +68,9 @@ const char *const serializerCaseStart = R"(
 )";
 
 const char *const serializerCaseDefineOptionalOperation = R"(
-        auto {0} = op.{1}().getDefiningOp();
-        if ({0}) {{
+        auto {0}Raw = op.{1}();
+        if ({0}Raw) {{
+          auto {0} = {0}Raw.getDefiningOp();
           auto {0}ID = internOperation(opCache, {0});
 
           protocir::CIROpID p{0}ID;
