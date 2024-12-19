@@ -40,8 +40,6 @@ syntax = "proto3";
 package protocir;
 option java_package = "org.jacodb.impl.grpc";
 
-import "google/protobuf/empty.proto";
-import "google/protobuf/any.proto";
 import "setup.proto";
 import "enumgen.proto";
 )";
@@ -241,8 +239,13 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
         continue;
       const auto &successorName =
           llvm::convertToSnakeFromCamelCase(successor.name);
-      os << formatv(protoOpMessageField, "CIRBlockID", successorName,
-                    std::to_string(messageIdx + 1));
+      if (successor.isVariadic()) {
+        os << formatv(protoOpMessageField, "repeated CIRBlockID", successorName,
+                      std::to_string(messageIdx + 1));
+      } else {
+        os << formatv(protoOpMessageField, "CIRBlockID", successorName,
+                      std::to_string(messageIdx + 1));
+      }
     }
     os << formatv(protoOpMessageEnd);
   }

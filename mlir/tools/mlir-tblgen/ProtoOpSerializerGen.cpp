@@ -206,6 +206,25 @@ const char *const serializerCaseDefineOptionalEnum = R"(
         }
 )";
 
+const char *const serializerCaseDefineSuccessor = R"(
+        auto {0} = op.{1}();
+        auto {0}ID = internBlock(blockCache, {0});
+        protocir::CIRBlockID p{0}ID;
+        p{0}ID.set_id({0}ID);
+
+        *p{2}.mutable_{3}() = p{0}ID;
+)";
+
+const char *const serializerCaseDefineVariadicSuccessor = R"(
+        auto {0} = op.{1}();
+        for (auto e{0} : {0}) {{
+          auto e{0}Proto = p{2}.add_{3}();
+          auto e{0}ID = internBlock(blockCache, e{0});
+          protocir::CIRBlockID pe{0}ID;
+          pe{0}ID.set_id(e{0}ID);
+        }
+)";
+
 const char *const serializerCaseEnd = R"(
         pInst->mutable_{0}()->CopyFrom(p{1});
       })
@@ -436,6 +455,25 @@ static bool emitOpProtoSerializer(const RecordKeeper &records,
 
         emitAttributeSerializer(op, attrName, attrNameCpp, attrNameProto,
                                 attrType, attrTypeProto, os);
+      }
+    }
+    os << "\n";
+    unsigned numSuccessors = op.getNumSuccessors();
+    for (unsigned i = 0; i != numSuccessors; ++i, ++messageIdx) {
+      const NamedSuccessor &successor = op.getSuccessor(i);
+      if (successor.name.empty())
+        continue;
+      const auto &successorNameProto =
+          llvm::convertToSnakeFromCamelCase(successor.name);
+      const auto &successorNameCpp =
+          llvm::convertToCamelFromSnakeCase(successor.name);
+      std::string getterName = op.getGetterName(successor.name);
+      if (successor.isVariadic()) {
+        os << formatv(serializerCaseDefineVariadicSuccessor, successorNameCpp,
+                      getterName, op.getCppClassName(), successorNameProto);
+      } else {
+        os << formatv(serializerCaseDefineSuccessor, successorNameCpp,
+                      getterName, op.getCppClassName(), successorNameProto);
       }
     }
     os << "\n";
