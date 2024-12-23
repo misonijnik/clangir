@@ -57,6 +57,7 @@ const char *const protoOpMessageEnd = R"(
 const char *const protoCirOpMessageStart = R"(
 message CIROp {{
   CIROpID base = 1;
+  repeated CIRTypeID result_types = 2;
   oneof operation {{
 )";
 
@@ -126,7 +127,7 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
 
   std::vector<const Record *> defs = getRequestedOpDefinitions(records);
   os << formatv(protoCirOpMessageStart);
-  int caseIdx = 1;
+  int caseIdx = 2;
   for (auto *def : defs) {
     Operator op(*def);
     os << formatv(protoCirOpMessageField, op.getCppClassName(),
