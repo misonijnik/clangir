@@ -78,6 +78,7 @@ const std::map<StringRef, StringRef> cppAttrTypeToProto = {
     {"::cir::GlobalDtorAttr", "bool"},
     {"::cir::GlobalCtorAttr", "bool"},
     {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
+    {"::mlir::Attribute", "string"},
     {"::mlir::TypedAttr", "string"},
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
     {"::cir::FuncType", "CIRTypeID"},
@@ -111,7 +112,6 @@ const std::map<StringRef, StringRef> cppOperandTypeToProto = {
 
 const std::set<StringRef> typeBlackList = {
     "::std::optional< ::mlir::ArrayAttr >",
-    "::std::optional<::mlir::Attribute>",
     "::std::optional<::cir::DynamicCastInfoAttr>",
     "::std::optional<::cir::ASTVarDeclInterface>",
     "::mlir::ArrayAttr",

@@ -212,6 +212,18 @@ const char *const serializerCaseDefineOptionalEnum = R"(
         }
 )";
 
+const char *const serializerCaseDefineOptionalAttribute = R"(
+        auto {0}Optional = op.{1}();
+        if ({0}Optional) {{
+          auto {0} = {0}Optional.value();
+
+          std::string {0}Str;
+          llvm::raw_string_ostream {0}RawStream({0}Str);
+          {0}.print({0}RawStream);
+          *p{2}.mutable_{3}() = {0}Str;
+        }
+)";
+
 const char *const serializerCaseDefineSuccessor = R"(
         auto {0} = op.{1}();
         auto {0}ID = internBlock(blockCache, {0});
@@ -252,6 +264,7 @@ const std::map<StringRef, StringRef> cppAttrTypeToProto = {
     {"::cir::GlobalDtorAttr", "bool"},
     {"::cir::GlobalCtorAttr", "bool"},
     {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
+    {"::mlir::Attribute", "string"},
     {"::mlir::TypedAttr", "string"},
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
     {"::cir::FuncType", "CIROpID"},
@@ -285,7 +298,6 @@ const std::map<StringRef, StringRef> cppOperandTypeToProto = {
 
 const std::set<StringRef> typesBlackList = {
     "::std::optional< ::mlir::ArrayAttr >",
-    "::std::optional<::mlir::Attribute>",
     "::std::optional<::cir::DynamicCastInfoAttr>",
     "::std::optional<::cir::ASTVarDeclInterface>",
     "::mlir::ArrayAttr",
@@ -314,6 +326,9 @@ static void emitOptionalAttributeSerializer(
              attrType == "::cir::GlobalDtorAttr") {
     os << formatv(serializerCaseDefineOptionalCtorDtor, attrNameCpp, getterName,
                   op.getCppClassName(), attrNameProto);
+  } else if (attrType == "::mlir::Attribute") {
+    os << formatv(serializerCaseDefineOptionalAttribute, attrNameCpp,
+                  getterName, op.getCppClassName(), attrNameProto);
   } else {
     os << formatv(serializerCaseDefineOptional, attrNameCpp, getterName,
                   op.getCppClassName(), attrNameProto);
