@@ -44,32 +44,31 @@ using namespace protocir;
 )";
 
 const char *const serializerDefStart = R"(
-void Serializer::serializeOperation(mlir::Operation &inst,
-                                    protocir::CIROp *pInst,
-                                    protocir::CIRModuleID pModuleID,
-                                    TypeCache &typeCache,
-                                    OperationCache &opCache,
-                                    BlockCache &blockCache,
-                                    FunctionCache &functionCache
+protocir::CIROp Serializer::serializeOperation(mlir::Operation &inst,
+                                               protocir::CIRModuleID pModuleID,
+                                               TypeCache &typeCache,
+                                               OperationCache &opCache,
+                                               BlockCache &blockCache) {
+  protocir::CIROp pInst;
 
-) {
   auto instID = internOperation(opCache, &inst);
   llvm::TypeSwitch<mlir::Operation *>(&inst)
 )";
 
 const char *const serializerDefEnd = R"(
+  return pInst;
 }
 )";
 
 const char *const serializerCaseStart = R"(
-      .Case<cir::{0}>([instID, pInst, pModuleID, &typeCache, &blockCache, &opCache](cir::{0} op) {{
+      .Case<cir::{0}>([instID, &pInst, pModuleID, &typeCache, &blockCache, &opCache](cir::{0} op) {{
         protocir::CIR{0} p{0};
-        pInst->mutable_base()->set_id(instID);
+        pInst.mutable_base()->set_id(instID);
 
         auto resultTypes = op.getOperation()->getResultTypes();
         for (const auto &resultType : resultTypes) {{
           auto resultTypeID = internType(typeCache, resultType);
-          pInst->add_result_types()->set_id(resultTypeID);
+          pInst.add_result_types()->set_id(resultTypeID);
         }
 )";
 
@@ -233,7 +232,7 @@ const char *const serializerCaseDefineVariadicSuccessor = R"(
 )";
 
 const char *const serializerCaseEnd = R"(
-        pInst->mutable_{0}()->CopyFrom(p{1});
+        pInst.mutable_{0}()->CopyFrom(p{1});
       })
 )";
 
