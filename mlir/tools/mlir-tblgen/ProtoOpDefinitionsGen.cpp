@@ -83,13 +83,13 @@ const std::map<StringRef, StringRef> cppAttrTypeToProto = {
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
     {"::cir::FuncType", "CIRTypeID"},
     {"::mlir::Type", "CIRTypeID"},
-    {"::cir::PointerType", "CIROpID"},
-    {"::cir::IntType", "CIROpID"},
-    {"::cir::MethodType", "CIROpID"},
-    {"::cir::DataMemberType", "CIROpID"},
-    {"::cir::ComplexType", "CIROpID"},
-    {"::cir::VectorType", "CIROpID"},
-    {"::cir::BoolType", "CIROpID"}};
+    {"::cir::PointerType", "CIRValue"},
+    {"::cir::IntType", "CIRValue"},
+    {"::cir::MethodType", "CIRValue"},
+    {"::cir::DataMemberType", "CIRValue"},
+    {"::cir::ComplexType", "CIRValue"},
+    {"::cir::VectorType", "CIRValue"},
+    {"::cir::BoolType", "CIRValue"}};
 
 const std::map<StringRef, StringRef> cppOperandTypeToProto = {
     {"uint64_t", "uint64"},
@@ -100,15 +100,15 @@ const std::map<StringRef, StringRef> cppOperandTypeToProto = {
     {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
     {"::mlir::TypedAttr", "string"},
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
-    {"::cir::FuncType", "CIROpID"},
-    {"::mlir::Type", "CIROpID"},
-    {"::cir::PointerType", "CIROpID"},
-    {"::cir::IntType", "CIROpID"},
-    {"::cir::MethodType", "CIROpID"},
-    {"::cir::DataMemberType", "CIROpID"},
-    {"::cir::ComplexType", "CIROpID"},
-    {"::cir::VectorType", "CIROpID"},
-    {"::cir::BoolType", "CIROpID"}};
+    {"::cir::FuncType", "CIRValue"},
+    {"::mlir::Type", "CIRValue"},
+    {"::cir::PointerType", "CIRValue"},
+    {"::cir::IntType", "CIRValue"},
+    {"::cir::MethodType", "CIRValue"},
+    {"::cir::DataMemberType", "CIRValue"},
+    {"::cir::ComplexType", "CIRValue"},
+    {"::cir::VectorType", "CIRValue"},
+    {"::cir::BoolType", "CIRValue"}};
 
 const std::set<StringRef> typeBlackList = {
     "::std::optional< ::mlir::ArrayAttr >",
@@ -165,8 +165,8 @@ static bool emitOpProtoDefs(const RecordKeeper &records, raw_ostream &os) {
         auto it = cppOperandTypeToProto.find(operandType);
         const auto &operandTypeProto =
             it != cppOperandTypeToProto.end() ? it->second : operandType;
-        assert(operandTypeProto == "CIROpID");
-        os << formatv(protoOpMessageField, "repeated CIROpIDs", operandName,
+        assert(operandTypeProto == "CIRValue");
+        os << formatv(protoOpMessageField, "repeated CIRValues", operandName,
                       std::to_string(messageIdx + 1));
       } else if (operand.isVariadic()) {
         auto it = cppOperandTypeToProto.find(operandType);

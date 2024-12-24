@@ -75,13 +75,9 @@ const char *const serializerCaseStart = R"(
 const char *const serializerCaseDefineOptionalOperation = R"(
         auto {0}Raw = op.{1}();
         if ({0}Raw) {{
-          auto {0} = {0}Raw.getDefiningOp();
-          auto {0}ID = internOperation(opCache, {0});
-
-          protocir::CIROpID p{0}ID;
-          p{0}ID.set_id({0}ID);
-
-          *p{2}.mutable_{3}() = p{0}ID;
+          auto {0}Value = Serializer::serializeValue(
+              {0}Raw, pModuleID, typeCache, opCache, blockCache);
+          *p{2}.mutable_{3}() = {0}Value;
         }
 )";
 
@@ -89,8 +85,9 @@ const char *const serializerCaseDefineVariadicOperation = R"(
         auto {0} = op.{1}();
         for (auto e{0} : {0}) {{
           auto e{0}Proto = p{2}.add_{3}();
-          auto e{0}ID = internOperation(opCache, e{0}.getDefiningOp());
-          e{0}Proto->set_id(e{0}ID);
+          auto e{0}Value = Serializer::serializeValue(
+              e{0}, pModuleID, typeCache, opCache, blockCache);
+          e{0}Proto->CopyFrom(e{0}Value);
         }
 )";
 
@@ -100,20 +97,18 @@ const char *const serializerCaseDefineVariadicOfVariadicOperation = R"(
           auto e{0}Proto = p{2}.add_{3}();
           for (auto ee{0} : e{0}) {{
             auto ee{0}Proto = e{0}Proto->add_range();
-            auto ee{0}ID = internOperation(opCache, ee{0}.getDefiningOp());
-            ee{0}Proto->set_id(ee{0}ID);
+            auto ee{0}Value = Serializer::serializeValue(
+                ee{0}, pModuleID, typeCache, opCache, blockCache);
+            ee{0}Proto->CopyFrom(ee{0}Value);
           }
         }
 )";
 
 const char *const serializerCaseDefineOperation = R"(
-        auto {0} = op.{1}().getDefiningOp();
-        auto {0}ID = internOperation(opCache, {0});
-
-        protocir::CIROpID p{0}ID;
-        p{0}ID.set_id({0}ID);
-
-        *p{2}.mutable_{3}() = p{0}ID;
+        auto {0} = op.{1}();
+        auto {0}Value = Serializer::serializeValue(
+            {0}, pModuleID, typeCache, opCache, blockCache);
+        *p{2}.mutable_{3}() = {0}Value;
 )";
 
 const char *const serializerCaseDefinePrimitive = R"(
