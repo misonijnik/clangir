@@ -51,6 +51,12 @@ protocir::CIROp Serializer::serializeOperation(mlir::Operation &inst,
                                                BlockCache &blockCache) {
   protocir::CIROp pInst;
 
+  auto resultTypes = inst.getResultTypes();
+  for (const auto &resultType : resultTypes) {
+    auto resultTypeID = internType(typeCache, resultType);
+    pInst.add_result_types()->set_id(resultTypeID);
+  }
+
   auto instID = internOperation(opCache, &inst);
   llvm::TypeSwitch<mlir::Operation *>(&inst)
 )";
@@ -64,12 +70,6 @@ const char *const serializerCaseStart = R"(
       .Case<cir::{0}>([instID, &pInst, pModuleID, &typeCache, &blockCache, &opCache](cir::{0} op) {{
         protocir::CIR{0} p{0};
         pInst.mutable_base()->set_id(instID);
-
-        auto resultTypes = op.getOperation()->getResultTypes();
-        for (const auto &resultType : resultTypes) {{
-          auto resultTypeID = internType(typeCache, resultType);
-          pInst.add_result_types()->set_id(resultTypeID);
-        }
 )";
 
 const char *const serializerCaseDefineOptionalOperation = R"(

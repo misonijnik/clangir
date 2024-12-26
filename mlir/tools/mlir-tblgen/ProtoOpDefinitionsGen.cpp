@@ -83,31 +83,13 @@ const std::map<StringRef, StringRef> cppAttrTypeToProto = {
     {"::cir::VisibilityAttr", "CIRVisibilityKind"},
     {"::cir::FuncType", "CIRTypeID"},
     {"::mlir::Type", "CIRTypeID"},
-    {"::cir::PointerType", "CIRValue"},
-    {"::cir::IntType", "CIRValue"},
-    {"::cir::MethodType", "CIRValue"},
-    {"::cir::DataMemberType", "CIRValue"},
-    {"::cir::ComplexType", "CIRValue"},
-    {"::cir::VectorType", "CIRValue"},
-    {"::cir::BoolType", "CIRValue"}};
+};
 
 const std::map<StringRef, StringRef> cppOperandTypeToProto = {
-    {"uint64_t", "uint64"},
-    {"uint32_t", "uint32"},
-    {"::llvm::StringRef", "string"},
-    {"::llvm::APInt", "string"},
-    {"::llvm::APFloat", "string"},
-    {"::llvm::ArrayRef<int32_t>", "repeated uint32"},
-    {"::mlir::TypedAttr", "string"},
-    {"::cir::VisibilityAttr", "CIRVisibilityKind"},
-    {"::cir::FuncType", "CIRValue"},
-    {"::mlir::Type", "CIRValue"},
-    {"::cir::PointerType", "CIRValue"},
-    {"::cir::IntType", "CIRValue"},
-    {"::cir::MethodType", "CIRValue"},
-    {"::cir::DataMemberType", "CIRValue"},
-    {"::cir::ComplexType", "CIRValue"},
-    {"::cir::VectorType", "CIRValue"},
+    {"::cir::FuncType", "CIRValue"},    {"::mlir::Type", "CIRValue"},
+    {"::cir::PointerType", "CIRValue"}, {"::cir::IntType", "CIRValue"},
+    {"::cir::MethodType", "CIRValue"},  {"::cir::DataMemberType", "CIRValue"},
+    {"::cir::ComplexType", "CIRValue"}, {"::cir::VectorType", "CIRValue"},
     {"::cir::BoolType", "CIRValue"}};
 
 const std::set<StringRef> typeBlackList = {
