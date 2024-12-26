@@ -90,7 +90,8 @@ emitEnumProtoSerializerDef(StringRef enumName, StringRef fullEnumName,
   os << formatv(serializerDefEnumStart, enumName, fullEnumName);
 
   for (const auto &enumerant : enumerants) {
-    auto symbol = makeIdentifier(enumerant.getSymbol());
+    auto symbol = llvm::convertToCamelFromSnakeCase(
+        makeIdentifier(enumerant.getSymbol()), true);
     os << formatv(serializerDefEnumCase, enumName, fullEnumName, symbol,
                   formatv("{0}_{1}", enumName, symbol));
   }
