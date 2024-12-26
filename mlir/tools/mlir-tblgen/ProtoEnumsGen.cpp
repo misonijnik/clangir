@@ -67,7 +67,8 @@ static void emitEnumProto(StringRef enumName, StringRef description,
 
   int messageIdx = 0;
   for (const auto &enumerant : enumerants) {
-    auto symbol = makeIdentifier(enumerant.getSymbol());
+    auto symbol = llvm::convertToCamelFromSnakeCase(
+        makeIdentifier(enumerant.getSymbol()), true);
     os << formatv(protoEnumMessageField, formatv("{0}_{1}", enumName, symbol),
                   std::to_string(messageIdx++));
   }
